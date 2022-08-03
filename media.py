@@ -7,16 +7,16 @@ import time
 from tensorflow.keras.models import load_model
 from std_msgs.msg import Float64MultiArray
 
-"""
+
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
 data = Float64MultiArray()
 
 pub = rospy.Publisher('newdata', Float64MultiArray, queue_size=10)
 rospy.init_node('publisher')
-time.sleep(0.1) #Needs a delay to init
+time.sleep(0.1) 
 
-"""
+
 def calculate_angle(a,b,c):
 	a = np.array(a) # First
 	b = np.array(b) # Mid
@@ -29,7 +29,13 @@ def calculate_angle(a,b,c):
 		angle = 360-angle
 
 	return angle 
-	
+
+a=360
+b=300
+c=0
+wristpitch = 0
+wristroll = 0
+ee = 1	
 	
 draw = mp.solutions.drawing_utils
 pose = mp.solutions.pose
@@ -43,7 +49,7 @@ classNames= ['okay', 'peace', 'thumbs up', 'thumbs down', 'call me', 'stop', 'ro
 
 cap = cv2.VideoCapture(3)
 
-while cap.isOpened():
+while not rospy.is_shutdown() and cap.isOpened():
 	
 
 	ret, frame = cap.read()
@@ -65,7 +71,7 @@ while cap.isOpened():
 	if result.right_hand_landmarks:
 		landmarks = []
 
-		for ld in result.right_hand_landmarks.landmark:
+		for id, ld in enumerate(result.right_hand_landmarks.landmark):
 			# print(id, lm)
 			ldx = int(ld.x * x)
 			ldy = int(ld.y * y)
@@ -84,15 +90,29 @@ while cap.isOpened():
 	# post process the result
 	if result.left_hand_landmarks:
 		landmarks = []
-
-		for lm in result.left_hand_landmarks.landmark:
+		lmlist = []
+		for id, lm in enumerate(result.left_hand_landmarks.landmark):
 			# print(id, lm)
 			lmx = int(lm.x * x)
 			lmy = int(lm.y * y)
 
 			landmarks.append([lmx, lmy])
-
+			
+			#lmlist[id].append(lmx,lmy)
+	
+			"""
+			x1, y1 = landmarks[5]
+			x2, y2 = landmarks[17]
+			distance = int(math.sqrt((y2 - y1) ** 2 + (x2 - x1) ** 2))
+			A, B, C = coff
+			distanceCM = A * distance ** 2 + B * distance + C
+	 		
+			print(distanceCM, distance)
+			
+			"""
+		#print(landmarks2)
 		# Drawing landmarks on frames
+		
 		draw.draw_landmarks(frame, result.left_hand_landmarks,holistic.HAND_CONNECTIONS)
 		# Predict gesture
 		prediction = model.predict([landmarks])
@@ -122,55 +142,103 @@ while cap.isOpened():
 	cv2.putText(frame, str(angleE), tuple(np.multiply(R_Elbow, [640, 480]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 	cv2.putText(frame, str(angleW), tuple(np.multiply(R_Wrist, [640, 480]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 	"""
-	print(landmark_pose[pose.PoseLandmark.LEFT_WRIST])
+	#print(landmark_pose[pose.PoseLandmark.LEFT_WRIST])
 
-	if 115 < angle < 160 :
-		motion = "Left"
-		m = 3
+
+
+	if gestureL == 'live long':
+		motion = 'Forward'
+		m = 1
+		xvel = 0.5
+		yvel = 0.5
+	elif gestureL == 'fist':
+		motion = 'Reverse'
+		m = 2
 		xvel = -0.5
-		yvel = 0.2
-	elif 20 < angle < 90:
-		motion = "Right"
-		m = 4
-		xvel = 0.2
+		yvel = -0.5
+	elif gestureL == 'thumbs up':
+		stage = 'Spin Left'
+		m = 5
+		xvel = -0.5
+		yvel = 0.5
+		
+	elif gestureL == 'thumbs down':
+		stage = 'Spin Right'
+		m = 6
+		xvel = 0.5
 		yvel = -0.5
 	else:
-		if gestureL == 'live long':
-			motion = 'Forward'
-			m = 1
-			xvel = 0.5
-			yvel = 0.5
-		elif gestureL == 'fist':
-			motion = 'Reverse'
-			m = 2
+		
+		if 115 < angle < 160 :
+			motion = "Left"
+			m = 3
 			xvel = -0.5
+			yvel = 0.2
+		
+		elif 20 < angle < 90:
+			motion = "Right"
+			m = 4
+			xvel = 0.2
 			yvel = -0.5
-		elif gestureL == 'thumbs up':
-			stage = 'Spin Left'
-			m = 5
-			xvel = -0.5
-			yvel = 0.5
-			
-		elif gestureL == 'thumbs down':
-			stage = 'Spin Right'
-			m = 6
-			xvel = 0.5
-			yvel = -0.5
-		else:
+		
+		else:	
 			motion = 'Stop'
 			m = 5
-			xvel = -0.5
-			yvel = 0.5	
+			xvel = 0
+			yvel = 0	
+	
+	
 		
-
-	if gestureR == 'live long':
-		arm = 'Open'
-		
-	else:
+				
+	if gestureR == 'fist' :
 		arm = 'Close'
+		ee = 1
+	else:
+		arm = 'Open'
+		ee = 0
+	
+	if gestureR == 'thumbs up' :
+		arm = "X axis"
+		
+		a = (angleS-30)*5
 		
 	
+	elif gestureR == 'rock' :
+		arm = "Y axis"
+		
+		b = (angleS-30)*5
+		
+	elif gestureR == 'okay':
+		arm = 'Z axis'
+		
+		if (angleS<80):
+			
+			c = (angleS-120)*5
+			
+		else:
+		
+			c = (angleS-70)*5
+	
+	
+	elif gestureR == 'peace':
+	
+		a=360
+		b=300
+		c=0
+		wristpitch = 0
+		wristroll = 0
+		ee = 1
+		arm = ""
+	
+	
+	
 
+	print(a)
+	
+	data.data = [a,b,c,wristpitch,wristroll,ee,xvel,yvel]
+
+	pub.publish(data)
+	
 	# show the motion commands
 	cv2.putText(frame, motion, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2, cv2.LINE_AA)
 
