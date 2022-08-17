@@ -6,7 +6,7 @@ import rospy
 import time
 from tensorflow.keras.models import load_model
 from std_msgs.msg import Float64MultiArray
-
+import pandas as pd
 
 print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
 
@@ -32,11 +32,12 @@ def calculate_angle(a,b,c):
 
 a=360
 b=300
-c=0
+z=0
 wristpitch = 0
 wristroll = 0
 ee = 1	
-	
+arm = ""
+
 draw = mp.solutions.drawing_utils
 pose = mp.solutions.pose
 holistic = mp.solutions.holistic
@@ -120,10 +121,12 @@ while not rospy.is_shutdown() and cap.isOpened():
 		classID = np.argmax(prediction)
 		gestureR = classNames[classID]
 	
-
+	
+	
 	# Get coordinates for left shoulder, right shoulder, elbow and wrist
 	L_Elbow = [landmark_pose[pose.PoseLandmark.RIGHT_ELBOW.value].x,landmark_pose[pose.PoseLandmark.RIGHT_ELBOW.value].y]
 	L_Shoulder = [landmark_pose[pose.PoseLandmark.RIGHT_SHOULDER.value].x,landmark_pose[pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+	L_Wrist = [landmark_pose[pose.PoseLandmark.RIGHT_WRIST.value].x,landmark_pose[pose.PoseLandmark.RIGHT_WRIST.value].y]
 	R_Shoulder = [landmark_pose[pose.PoseLandmark.LEFT_SHOULDER.value].x,landmark_pose[pose.PoseLandmark.LEFT_SHOULDER.value].y]
 	R_Elbow = [landmark_pose[pose.PoseLandmark.LEFT_ELBOW.value].x,landmark_pose[pose.PoseLandmark.LEFT_ELBOW.value].y]
 	R_Wrist = [landmark_pose[pose.PoseLandmark.LEFT_WRIST.value].x,landmark_pose[pose.PoseLandmark.LEFT_WRIST.value].y]
@@ -138,106 +141,106 @@ while not rospy.is_shutdown() and cap.isOpened():
 	angleW = calculate_angle(R_Elbow, R_Elbow , R_Index)
 	
 	"""
+	cv2.putText(frame, str(angleW), tuple(np.multiply(R_Wrist, [640, 480]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 	cv2.putText(frame, str(angleS), tuple(np.multiply(R_Shoulder, [640, 480]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 	cv2.putText(frame, str(angleE), tuple(np.multiply(R_Elbow, [640, 480]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 	cv2.putText(frame, str(angleW), tuple(np.multiply(R_Wrist, [640, 480]).astype(int)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2, cv2.LINE_AA)
 	"""
+
 	#print(landmark_pose[pose.PoseLandmark.LEFT_WRIST])
-
-
-
-	if gestureL == 'live long':
-		motion = 'Forward'
-		m = 1
-		xvel = 0.5
-		yvel = 0.5
-	elif gestureL == 'fist':
-		motion = 'Reverse'
-		m = 2
-		xvel = -0.5
-		yvel = -0.5
-	elif gestureL == 'thumbs up':
-		stage = 'Spin Left'
-		m = 5
-		xvel = -0.5
-		yvel = 0.5
-		
-	elif gestureL == 'thumbs down':
-		stage = 'Spin Right'
-		m = 6
-		xvel = 0.5
-		yvel = -0.5
-	else:
-		
-		if 115 < angle < 160 :
+	arm = 'Open'
+	if 115 < angle < 160 :
 			motion = "Left"
 			m = 3
-			xvel = -0.5
-			yvel = 0.2
+			xvel = 0
+			yvel = 2.5
 		
-		elif 20 < angle < 90:
+	elif 20 < angle < 90:
 			motion = "Right"
 			m = 4
-			xvel = 0.2
-			yvel = -0.5
+			xvel = 0
+			yvel = -2.5
+		
+
+	
+	else:
+		
+		if gestureL == 'live long':
+			motion = 'Forward'
+			m = 1
+			xvel = 2
+			yvel = 0
+		elif gestureL == 'fist':
+			motion = 'Reverse'
+			m = 2
+			xvel = -2
+			yvel = 0
 		
 		else:	
 			motion = 'Stop'
 			m = 5
 			xvel = 0
 			yvel = 0	
-	
-	
-		
-				
+			
+					
 	if gestureR == 'fist' :
 		arm = 'Close'
-		ee = 1
-	else:
-		arm = 'Open'
 		ee = 0
-	
-	if gestureR == 'thumbs up' :
-		arm = "X axis"
+		xvel = 0
+		yvel = 0
 		
-		a = (angleS-30)*5
+			
+	elif gestureR == 'live long':
+		arm = 'Open'
+		ee = 1
+		xvel = 0
+		yvel = 0
+	
+	elif gestureR == 'thumbs up' :
+		arm = "X axis"
+		xvel = 0
+		yvel = 0
+		a = (angleW-30)*4.7
 		
 	
 	elif gestureR == 'rock' :
 		arm = "Y axis"
+		xvel = 0
+		yvel = 0
+		b = (angleW-30)*4.7
 		
-		b = (angleS-30)*5
+	elif gestureR == 'peace' :
+		xvel = 0
+		yvel = 0
+		arm = "Z axis"
 		
-	elif gestureR == 'okay':
-		arm = 'Z axis'
-		
-		if (angleS<80):
+		if (angleW<80):
 			
-			c = (angleS-120)*5
+			z = (angleW-80)*6.5
 			
 		else:
 		
-			c = (angleS-70)*5
+			z = (angleW-70)*5
 	
-	
-	elif gestureR == 'peace':
-	
+	elif gestureR == 'thumbs down':
+		arm = "Reset"
+		xvel = 0
+		yvel = 0
 		a=360
 		b=300
-		c=0
+		z=0
 		wristpitch = 0
 		wristroll = 0
 		ee = 1
 		arm = ""
 	
+		
 	
-	
-
-	print(a)
-	
-	data.data = [a,b,c,wristpitch,wristroll,ee,xvel,yvel]
-
+	data.data =[a,b,z,wristpitch,wristroll,ee,xvel,yvel]
+	print(data.data)
 	pub.publish(data)
+	
+
 	
 	# show the motion commands
 	cv2.putText(frame, motion, (10, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255), 2, cv2.LINE_AA)
@@ -249,15 +252,19 @@ while not rospy.is_shutdown() and cap.isOpened():
 	
 	
 
+
 	draw.draw_landmarks(frame, result.right_hand_landmarks,holistic.HAND_CONNECTIONS)
 	draw.draw_landmarks(frame, result.pose_landmarks,holistic.POSE_CONNECTIONS)
 	draw.draw_landmarks(frame, result.left_hand_landmarks,holistic.HAND_CONNECTIONS)
 
 	cv2.imshow("Output", frame)
 	if cv2.waitKey(1) == ord('q'):
+		
+	
 		break
 
 
 # release the webcam and destroy all active windows
+
 cap.release()
 cv2.destroyAllWindows()
